@@ -2618,23 +2618,40 @@ async function saveRideEdit() {
   document.getElementById('modal-ride-edit').classList.add('hidden');
   editRideIndex = -1;
   renderRideTable();
-  renderTotals(); // 金額変更時に合計を再計算
+  renderTotals();
 
-  // Supabase更新（管理者画面に即反映）
+  // ── Supabase更新（管理者画面にリアルタイム反映） ──
   const patch = {
-    customer_name:  customer,
-    departure,
-    destination,
-    notes,
+    customer_name:  r.customer,
+    departure:      r.departure,
+    destination:    r.destination,
+    arrival_place:  r.destination,   // 管理画面は arrival_place を優先参照するため同期
+    notes:          r.notes,
     departure_time: r.depTime,
     arrival_time:   r.arrTime,
     distance:       r.distance,
-    fare:           r.fare
+    fare:           r.fare,
+    payment_type:   r.payment
   };
+
+  // ① r.id があれば直接 PATCH
   if (r.id) {
     await sbPatch(`/rest/v1/rides?id=eq.${r.id}`, patch);
-  } else if (state.shiftId) {
-    await sbPatch(`/rest/v1/rides?shift_id=eq.${state.shiftId}&seq_num=eq.${r.seq}`, patch);
+    return;
+  }
+
+  // ② r.id がない場合 → seq_num で Supabase から id を取得してから PATCH
+  if (state.shiftId && r.seq) {
+    const found = await sbGet(
+      `/rest/v1/rides?shift_id=eq.${state.shiftId}&seq_num=eq.${r.seq}&select=id`
+    );
+    if (found && found[0] && found[0].id) {
+      r.id = found[0].id;
+      saveState();
+      await sbPatch(`/rest/v1/rides?id=eq.${r.id}`, patch);
+      return;
+    }
+    // ③ Supabase に未存在（保存失敗中）→ そのまま再送を retryUnsavedRides に任せる
     await syncRidesFromSupabase();
   }
 }
