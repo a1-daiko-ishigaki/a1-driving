@@ -1416,6 +1416,9 @@ function renderTotals() {
 // 代行中（GPS + 計測）
 // ============================================================
 let gpsWatchId = null, rideTimer = null;
+let gpsLastPositionTime = null; // ウォッチドッグ用
+let gpsWatchdogTimer = null;
+let wakeLock = null;
 let rideStartTime = null;
 let rideDist = 0, rideLastPos = null;
 let rideCurrentLat = null, rideCurrentLng = null;
@@ -1641,6 +1644,8 @@ async function doCompleteRide() {
 // GPS コールバック
 function onGpsPos(pos) {
   const { latitude: lat, longitude: lng, accuracy: acc } = pos.coords;
+  gpsLastPositionTime = Date.now(); // ウォッチドッグ更新
+  document.getElementById('gps-dot').classList.add('on'); // エラー後に点灯復帰
   // 現在位置は常に更新（管理画面への送信用）
   rideCurrentLat = lat; rideCurrentLng = lng;
   document.getElementById('gps-text').textContent = `GPS: 計測中（精度 ±${Math.round(acc)}m）`;
@@ -1728,8 +1733,19 @@ function hideParkingAlert() {
 }
 function onGpsErr(err) {
   document.getElementById('gps-dot').classList.remove('on');
-  const msgs = {1:'GPS許可が必要です',2:'GPS信号なし',3:'GPSタイムアウト'};
+  const msgs = {
+    1: 'GPS許可が必要です',
+    2: 'GPS信号なし（再取得中...）',
+    3: 'GPSタイムアウト（再取得中...）'
+  };
   document.getElementById('gps-text').textContent = msgs[err.code] || 'GPSエラー';
+  // タイムアウト・取得不可はwatch自体がエラー後に止まるため再起動
+  if (err.code !== 1 && state.shiftId) {
+    gpsWatchId = null; // 古いIDをクリア
+    setTimeout(() => {
+      if (state.shiftId && gpsWatchId === null) _doStartGpsWatch();
+    }, 3000);
+  }
 }
 
 // 逆ジオコーディング
@@ -1869,20 +1885,75 @@ async function pushVehicleLocation(lat,lng) {
   });
 }
 
-// 出勤中はGPS監視を常時起動（待機中も位置を送信）
-function startContinuousGps() {
-  if (gpsWatchId !== null) return; // 既に起動中
-  if (!navigator.geolocation) return;
-  gpsWatchId = navigator.geolocation.watchPosition(onGpsPos, onGpsErr, {
-    enableHighAccuracy: true, maximumAge: 3000, timeout: 15000
-  });
-}
+// ============================================================
+// GPS 再起動・ウォッチドッグ・Wake Lock
+// ============================================================
 
-function stopContinuousGps() {
+// GPS watchを（再）起動する内部関数（二重登録を防ぎつつ強制再起動）
+function _doStartGpsWatch() {
+  if (!navigator.geolocation) return;
   if (gpsWatchId !== null) {
     navigator.geolocation.clearWatch(gpsWatchId);
     gpsWatchId = null;
   }
+  gpsWatchId = navigator.geolocation.watchPosition(onGpsPos, onGpsErr, {
+    enableHighAccuracy: true, maximumAge: 2000, timeout: 10000
+  });
+}
+
+// 20秒間GPS更新がなければ自動再起動するウォッチドッグ
+function _startGpsWatchdog() {
+  if (gpsWatchdogTimer) clearInterval(gpsWatchdogTimer);
+  gpsWatchdogTimer = setInterval(() => {
+    if (!state.shiftId) return;
+    const now = Date.now();
+    if (gpsWatchId === null) {
+      // watchが止まっている
+      _doStartGpsWatch();
+    } else if (gpsLastPositionTime && now - gpsLastPositionTime > 20000) {
+      // 20秒以上位置更新なし → 再起動
+      document.getElementById('gps-text').textContent = 'GPS: 再接続中...';
+      _doStartGpsWatch();
+    }
+  }, 10000);
+}
+
+// Wake Lock：画面消灯を防いでGPSを維持
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    if (wakeLock && wakeLock.released === false) return;
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; });
+  } catch(e) {}
+}
+
+// バックグラウンドから復帰したらGPS再起動＋WakeLock再取得
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && state.shiftId) {
+    _doStartGpsWatch();
+    await requestWakeLock();
+  }
+});
+window.addEventListener('pageshow', async () => {
+  if (state.shiftId) {
+    _doStartGpsWatch();
+    await requestWakeLock();
+  }
+});
+
+// 出勤中はGPS監視を常時起動（待機中も位置を送信）
+function startContinuousGps() {
+  if (!navigator.geolocation) return;
+  _doStartGpsWatch();
+  _startGpsWatchdog();
+  requestWakeLock();
+}
+
+function stopContinuousGps() {
+  if (gpsWatchdogTimer) { clearInterval(gpsWatchdogTimer); gpsWatchdogTimer = null; }
+  if (gpsWatchId !== null) { navigator.geolocation.clearWatch(gpsWatchId); gpsWatchId = null; }
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
   document.getElementById('gps-dot').classList.remove('on');
 }
 
