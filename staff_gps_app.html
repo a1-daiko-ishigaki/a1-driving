@@ -596,6 +596,14 @@
     </div>
 
     <button class="btn btn-red" id="btn-arrive">🏁 到着（計測ストップ）</button>
+
+    <!-- 走行中に乗務記録を確認するボタン -->
+    <button class="btn" id="btn-check-rides-driving"
+      onclick="openRideCheckModal()"
+      style="background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.3);
+             font-size:13px;padding:10px;margin-top:6px">
+      📋 乗務記録を確認（計測継続中）
+    </button>
   </div>
 
   <!-- 到着後 -->
@@ -743,6 +751,61 @@
     </div>
     <button class="btn btn-blue" id="btn-sc-ok" style="margin:0;width:100%">✅ 変更を記録</button>
     <button class="btn btn-gray" id="btn-sc-cancel" style="margin:8px 0 0;width:100%">キャンセル</button>
+  </div>
+</div>
+
+<!-- ====================================================
+     走行中 乗務記録確認モーダル（計測継続）
+     ==================================================== -->
+<div id="modal-ride-check" style="
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,.78);
+  z-index:3000; align-items:flex-end; backdrop-filter:blur(3px);">
+  <div style="
+    background:var(--card); border-radius:18px 18px 0 0; width:100%;
+    max-height:85vh; overflow-y:auto; padding:16px;
+    animation:slideUp .22s ease;">
+    <!-- ヘッダー -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div style="font-size:15px;font-weight:800">📋 乗務記録</div>
+      <button onclick="closeRideCheckModal()"
+        style="background:var(--red);color:#fff;border:none;border-radius:8px;
+               padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;
+               touch-action:manipulation">
+        ✕ 閉じる（計測継続）
+      </button>
+    </div>
+    <!-- 計測継続バナー -->
+    <div style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);
+                border-radius:8px;padding:7px 12px;font-size:12px;color:#86efac;
+                margin-bottom:12px;display:flex;align-items:center;gap:6px">
+      <div style="width:8px;height:8px;border-radius:50%;background:#22c55e;animation:blink 1.2s infinite;flex-shrink:0"></div>
+      GPS・計測は継続中です
+    </div>
+    <!-- 件数・合計 -->
+    <div id="rcheck-summary"
+      style="font-size:12px;color:var(--muted);margin-bottom:10px;
+             background:var(--bg);border-radius:8px;padding:8px 12px;
+             display:flex;gap:12px;flex-wrap:wrap">
+    </div>
+    <!-- テーブル -->
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:340px">
+        <thead>
+          <tr style="background:var(--bg)">
+            <th style="padding:5px 6px;color:var(--muted);font-weight:600;text-align:center">#</th>
+            <th style="padding:5px 6px;color:var(--muted);font-weight:600;text-align:center">出発</th>
+            <th style="padding:5px 6px;color:var(--muted);font-weight:600;text-align:left">出発地</th>
+            <th style="padding:5px 6px;color:var(--muted);font-weight:600;text-align:center">到着</th>
+            <th style="padding:5px 6px;color:var(--muted);font-weight:600;text-align:left">目的地</th>
+            <th style="padding:5px 6px;color:var(--muted);font-weight:600;text-align:center">金額</th>
+            <th style="padding:5px 6px;color:var(--muted);font-weight:600;text-align:center">支払</th>
+          </tr>
+        </thead>
+        <tbody id="rcheck-tbody">
+          <tr><td colspan="7" style="color:var(--muted);padding:16px;text-align:center">記録なし</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -1398,6 +1461,56 @@ function renderRideTable() {
     </tr>`;
   }).join('');
 }
+
+// ============================================================
+// 走行中 乗務記録確認モーダル
+// ============================================================
+function openRideCheckModal() {
+  const modal = document.getElementById('modal-ride-check');
+  const tbody = document.getElementById('rcheck-tbody');
+  const summary = document.getElementById('rcheck-summary');
+
+  // テーブル描画（読み取り専用）
+  if (state.rides.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--muted);padding:16px;text-align:center">まだ記録がありません</td></tr>';
+    summary.innerHTML = '<span style="color:var(--muted)">記録なし</span>';
+  } else {
+    let total = 0, cash = 0, cashless = 0;
+    tbody.innerHTML = state.rides.map((r, i) => {
+      const payClass = r.payment === 'cash' ? 'pay-cash' : 'pay-cashless';
+      const payLabel = r.payment === 'cash' ? '現金' : 'カード等';
+      total += r.fare; if (r.payment === 'cash') cash += r.fare; else cashless += r.fare;
+      const destLabel = r.destination || r.arrivalPlace || '—';
+      return `<tr>
+        <td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">${i+1}</td>
+        <td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">${r.depTime||'—'}</td>
+        <td style="text-align:left;padding:7px 5px;border-bottom:1px solid var(--border);max-width:70px;overflow:hidden;white-space:nowrap">${r.departure||'—'}</td>
+        <td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">${r.arrTime||'—'}</td>
+        <td style="text-align:left;padding:7px 5px;border-bottom:1px solid var(--border);max-width:70px;overflow:hidden;white-space:nowrap">${destLabel}</td>
+        <td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border);font-weight:700">¥${r.fare.toLocaleString()}</td>
+        <td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)" class="${payClass}">${payLabel}</td>
+      </tr>`;
+    }).join('');
+    summary.innerHTML = `
+      <span>件数：<b style="color:var(--text)">${state.rides.length}件</b></span>
+      <span>合計：<b style="color:var(--text)">¥${total.toLocaleString()}</b></span>
+      <span>現金：<b style="color:var(--green)">¥${cash.toLocaleString()}</b></span>
+      <span>カード等：<b style="color:#a855f7">¥${cashless.toLocaleString()}</b></span>`;
+  }
+
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeRideCheckModal() {
+  document.getElementById('modal-ride-check').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+// オーバーレイ背景タップで閉じる
+document.getElementById('modal-ride-check').addEventListener('click', function(e) {
+  if (e.target === this) closeRideCheckModal();
+});
 
 function renderTotals() {
   let allTotal = 0, cashTotal = 0, cashlessTotal = 0;
