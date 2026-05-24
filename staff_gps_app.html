@@ -2321,7 +2321,7 @@ let staffList2shu  = []; // 2種メンバー
 let staffListZuiko = []; // 随行メンバー
 
 async function loadStaffFromSupabase() {
-  const data = await sbGet('/rest/v1/staff?is_active=eq.true&order=name.asc');
+  const data = await sbGet('/rest/v1/staff?is_active=eq.true&order=created_at.asc');
   if (!data || data.length === 0) return;
 
   staffList2shu  = data.filter(s => s.role === '2種');
