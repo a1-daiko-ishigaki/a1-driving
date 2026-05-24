@@ -563,7 +563,7 @@ function getCarSvg(carId, w, h) {
   return `<span style="font-size:20px">🚗</span>`;
 }
 
-function makeMarkerIcon(carId, status) {
+function makeMarkerIcon(carId, status, driverName) {
   const def = CAR_DEFS[carId];
   const color = def ? def.color : '#888';
   const isDriving = status === 'driving' || status === 'departing';
@@ -571,13 +571,14 @@ function makeMarkerIcon(carId, status) {
   const shadow = isDriving
     ? `filter:drop-shadow(0 0 6px ${color}) drop-shadow(0 0 3px ${color});`
     : `filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5));`;
+  const displayName = driverName || (def ? def.name : carId);
   return L.divIcon({
     className: '',
     html: `<div style="display:flex;flex-direction:column;align-items:center">
       <div style="${shadow}">${getCarSvg(carId, 66, 37)}</div>
       <div style="background:rgba(0,0,0,0.85);color:#fff;font-size:10px;font-weight:700;
         padding:2px 6px;border-radius:4px;margin-top:1px;white-space:nowrap;
-        ${isDriving ? `border:1px solid ${color};` : ''}">${def ? def.name : carId}・${label}</div>
+        ${isDriving ? `border:1px solid ${color};` : ''}">${displayName}・${label}</div>
     </div>`,
     iconSize: [80, 60], iconAnchor: [40, 20]
   });
@@ -668,19 +669,23 @@ function renderVehiclePanels() {
       div.id = 'card-' + carId;
       div.innerHTML = `
         <div class="vc-header">
-          <div class="vc-name" style="display:flex;align-items:center;gap:6px">
+          <div class="vc-name" style="display:flex;align-items:center;gap:8px">
             ${carId === 'car_a'
-              ? `<div style="background:#fff;border-radius:6px;padding:1px 4px;display:inline-flex;align-items:center">${getCarSvg(carId, 72, 38)}</div>`
-              : getCarSvg(carId, 72, 40)}
-            <span style="color:${def.color}">${def.name}</span>
+              ? `<div style="background:#fff;border-radius:6px;padding:1px 4px;display:inline-flex;align-items:center;flex-shrink:0">${getCarSvg(carId, 60, 32)}</div>`
+              : `<div style="flex-shrink:0">${getCarSvg(carId, 60, 34)}</div>`}
+            <div style="min-width:0">
+              <div style="font-size:17px;font-weight:800;color:var(--text);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                ${shift.driver1_name||'—'}${shift.driver2_name ? `　<span style="font-size:14px;color:var(--muted)">／</span>　${shift.driver2_name}` : ''}
+              </div>
+              <div style="font-size:11px;color:${def.color};font-weight:600;margin-top:1px">
+                ${def.name}
+                ${shift.date !== todayISO ? `　<span style="color:var(--yellow)">📅 ${shift.date}</span>` : ''}
+              </div>
+            </div>
           </div>
           <div class="vc-status st-waiting" id="status-${carId}">待機中</div>
         </div>
         <button class="btn-rides-popup" onclick="openRidesPopup('${carId}')">📋 乗務記録を見る <span id="ride-count-${carId}" style="font-size:12px;font-weight:700;color:var(--accent)"></span></button>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">
-          👤 ${shift.driver1_name||'—'}　／　${shift.driver2_name||'—'}
-          ${shift.date !== todayISO ? `<span style="color:var(--yellow);margin-left:6px">📅 ${shift.date}</span>` : ''}
-        </div>
         <!-- 配車中のみ表示 -->
         <div id="driving-info-${carId}" style="display:none">
           <div class="vc-info" id="info-${carId}">お客様：<span>—</span><br>目的地：<span>—</span></div>
@@ -702,7 +707,8 @@ function renderVehiclePanels() {
     }
     // マーカー初期化
     if (!markers[carId]) {
-      markers[carId] = L.marker(ISHIGAKI_CENTER, { icon: makeMarkerIcon(carId, 'waiting') }).addTo(map);
+      const driverLabel = shift.driver1_name || def.name;
+      markers[carId] = L.marker(ISHIGAKI_CENTER, { icon: makeMarkerIcon(carId, 'waiting', driverLabel) }).addTo(map);
     }
   });
 
@@ -789,7 +795,9 @@ function updateVehicleCard(carId, data) {
   // マーカー更新
   if (markers[carId]) {
     if (data.lat && data.lng) markers[carId].setLatLng([data.lat, data.lng]);
-    markers[carId].setIcon(makeMarkerIcon(carId, status));
+    const shift = activeShifts[carId];
+    const driverLabel = (shift && shift.driver1_name) ? shift.driver1_name : (CAR_DEFS[carId]?.name || carId);
+    markers[carId].setIcon(makeMarkerIcon(carId, status, driverLabel));
   }
 }
 
