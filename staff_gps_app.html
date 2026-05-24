@@ -373,8 +373,7 @@
       <div class="input-row">
         <label>氏名</label>
         <select id="driver1-name">
-          <option value="">選択してください</option>
-          <option>社長</option><option>茅原</option><option>金城</option><option>ホズミ</option>
+          <option value="">読み込み中...</option>
         </select>
       </div>
     </div>
@@ -391,9 +390,7 @@
       <div class="input-row">
         <label>氏名</label>
         <select id="driver2-name">
-          <option value="">選択してください</option>
-          <option>譜久島</option><option>崎山</option><option>タカヒロ</option>
-          <option>上原</option><option>大山</option><option>西川</option>
+          <option value="">読み込み中...</option>
         </select>
       </div>
     </div>
@@ -734,15 +731,12 @@
       <label>新担当者</label>
       <select id="sc-name2">
         <option value="">選択してください</option>
-        <option>譜久島</option><option>崎山</option><option>タカヒロ</option>
-        <option>上原</option><option>大山</option><option>西川</option>
       </select>
     </div>
     <div class="input-row" style="margin-bottom:12px;display:none" id="sc-row1">
       <label>新担当者</label>
       <select id="sc-name1">
         <option value="">選択してください</option>
-        <option>社長</option><option>茅原</option><option>金城</option><option>ホズミ</option>
       </select>
     </div>
     <div class="input-row" style="margin-bottom:20px">
@@ -2321,9 +2315,46 @@ function initDestinationDropdown() {
 }
 
 // ============================================================
+// スタッフ一覧をSupabaseから取得してセレクトを動的生成
+// ============================================================
+let staffList2shu  = []; // 2種メンバー
+let staffListZuiko = []; // 随行メンバー
+
+async function loadStaffFromSupabase() {
+  const data = await sbGet('/rest/v1/staff?is_active=eq.true&order=name.asc');
+  if (!data || data.length === 0) return;
+
+  staffList2shu  = data.filter(s => s.role === '2種');
+  staffListZuiko = data.filter(s => s.role === '随行');
+  // 役割不明の場合は全員を両方のリストに表示
+  const list1 = staffList2shu.length  > 0 ? staffList2shu  : data;
+  const list2 = staffListZuiko.length > 0 ? staffListZuiko : data;
+
+  _fillSelect('driver1-name', list1);
+  _fillSelect('driver2-name', list2);
+  _fillSelect('sc-name1',     list1);
+  _fillSelect('sc-name2',     list2);
+}
+
+function _fillSelect(id, staffArray, keepValue) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  const prev = keepValue !== undefined ? keepValue : sel.value;
+  sel.innerHTML = '<option value="">選択してください</option>';
+  staffArray.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.name;
+    opt.textContent = s.name;
+    sel.appendChild(opt);
+  });
+  if (prev) sel.value = prev;
+}
+
+// ============================================================
 // DOMContentLoaded
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
+  loadStaffFromSupabase(); // ← Supabaseからスタッフ取得（最初に実行）
   initSetup();
   loadCustomLocations();
   loadCustomers();
