@@ -1,15 +1,8 @@
-# ルートへのアクセスをスタッフ画面にリダイレクト
+# ルートへのアクセスをスタッフ画面にリダイレクト（index.html経由でも同様に処理される）
 [[redirects]]
   from = "/"
   to = "/staff_gps_app.html"
   status = 302
-
-# 存在しないページは staff_gps_app にフォールバック（404防止）
-[[redirects]]
-  from = "/*"
-  to = "/staff_gps_app.html"
-  status = 200
-  force = false
 
 [[headers]]
   for = "/*"
