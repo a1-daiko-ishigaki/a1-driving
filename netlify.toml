@@ -1,0 +1,24 @@
+# ルートへのアクセスをスタッフ画面にリダイレクト
+[[redirects]]
+  from = "/"
+  to = "/staff_gps_app.html"
+  status = 302
+
+# 存在しないページは staff_gps_app にフォールバック（404防止）
+[[redirects]]
+  from = "/*"
+  to = "/staff_gps_app.html"
+  status = 200
+  force = false
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Pragma = "no-cache"
+    Expires = "0"
+
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
