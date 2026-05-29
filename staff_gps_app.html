@@ -1544,6 +1544,9 @@ function startNewRide() {
   rideWaypoints = []; waypointLastPos = null;  // ← ルートリセット
   parkingCheckPos = null; parkingCheckTime = null; // ← 駐車検知リセット
   hideParkingAlert();
+  // 「この代行を記録する」ボタンを再有効化
+  const completeBtn = document.getElementById('btn-complete');
+  if (completeBtn) completeBtn.disabled = false;
 
   const seq = state.rides.length + 1;
   document.getElementById('ride-title').textContent = `🚗 代行 #${seq}`;
@@ -1679,6 +1682,11 @@ async function doArrive() {
 }
 
 async function doCompleteRide() {
+  // 二重タップ防止
+  const completeBtn = document.getElementById('btn-complete');
+  if (completeBtn.disabled) return;
+  completeBtn.disabled = true;
+
   const fareVal     = parseInt(document.getElementById('fare-edit').value) || rideFare;
   const notes       = document.getElementById('ride-notes').value;
   const customer    = document.getElementById('ride-customer').value;
@@ -1701,9 +1709,10 @@ async function doCompleteRide() {
   selectedCustLat = null; selectedCustLng = null; // 顧客座標リセット
   saveState();
 
-  // 画面は先に遷移
+  // 画面を遷移してすぐ描画 + 次フレームでも再描画（iOS PWA 描画タイミング対策）
   showScreen('main');
   renderMain();
+  setTimeout(renderMain, 0);
 
   // Supabaseへ確実に保存（失敗を明示的に通知）
   try {
@@ -1755,6 +1764,8 @@ async function doCompleteRide() {
     console.error('乗務保存ネットワークエラー', e);
     alert('⚠️ ネットワークエラー\n乗務記録のサーバー送信に失敗しました\nWi-Fiを確認してください');
   }
+  // Supabase保存完了後に再描画（保存完了後も確実にリストへ反映）
+  if (state.screen === 'main') renderMain();
 }
 
 // GPS コールバック
