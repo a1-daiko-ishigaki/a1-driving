@@ -661,9 +661,9 @@ function renderVehiclePanels() {
 
   // 既存カード以外を削除、新規追加
   activeIds.forEach(carId => {
+    const def = CAR_DEFS[carId] || {};
+    const shift = activeShifts[carId];
     if (!document.getElementById('card-' + carId)) {
-      const def = CAR_DEFS[carId] || {};
-      const shift = activeShifts[carId];
       const div = document.createElement('div');
       div.className = 'vehicle-card';
       div.id = 'card-' + carId;
