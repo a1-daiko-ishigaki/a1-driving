@@ -2076,8 +2076,9 @@ function stopContinuousGps() {
 // ============================================================
 // 配車依頼ポーリング
 // ============================================================
-let pendingReqId  = null;
-let acceptedReqData = null; // 受理した依頼データ（新規代行フォームへの自動入力用）
+let pendingReqId   = null;
+let pendingReqFull = null;    // 現在表示中の依頼データ（全フィールド）
+let acceptedReqData = null;   // 受理した依頼データ（新規代行フォームへの自動入力用）
 
 async function checkForRequests() {
   if (!state.car || state.screen === 'setup') return;
@@ -2086,15 +2087,15 @@ async function checkForRequests() {
   if (!data) return;
   if (data.length > 0) {
     const req = data[0];
+    // 常に最新の依頼データを pendingReqFull に保持
+    pendingReqFull = {
+      customer:    req.customer_name || '',
+      departure:   req.pickup        || '',
+      destination: req.destination   || '',
+      notes:       req.note          || ''
+    };
     if (req.id !== pendingReqId) {
       pendingReqId = req.id;
-      // 依頼データを保存（受理時にフォームへ自動入力するため）
-      acceptedReqData = {
-        customer:    req.customer_name || '',
-        departure:   req.pickup        || '',
-        destination: req.destination   || '',
-        notes:       req.note          || ''
-      };
       document.getElementById('req-content').textContent =
         `お客様：${req.customer_name||'—'}　場所：${req.pickup||'—'}　→　${req.destination||'—'}`;
       document.getElementById('req-banner').classList.remove('hidden');
@@ -2103,19 +2104,25 @@ async function checkForRequests() {
     }
   } else {
     document.getElementById('req-banner').classList.add('hidden');
-    pendingReqId = null;
+    pendingReqId   = null;
+    pendingReqFull = null;
   }
 }
 
 async function respondToRequest(status) {
   if (!pendingReqId) return;
+  // 「受ける」を押した瞬間に依頼データを確定保存
+  if (status === 'accepted' && pendingReqFull) {
+    acceptedReqData = { ...pendingReqFull };
+  } else {
+    acceptedReqData = null;
+  }
   await sbPatch(`/rest/v1/requests?id=eq.${pendingReqId}`, {
     status, accepted_at: new Date().toISOString()
   });
   document.getElementById('req-banner').classList.add('hidden');
-  pendingReqId = null;
-  // 見送りの場合は保存データをクリア
-  if (status !== 'accepted') acceptedReqData = null;
+  pendingReqId   = null;
+  pendingReqFull = null;
 }
 
 // ============================================================
