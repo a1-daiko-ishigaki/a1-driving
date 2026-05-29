@@ -1550,9 +1550,18 @@ function startNewRide() {
   document.getElementById('ride-sub').textContent =
     `${CARS[state.car].name} | ${state.currentDriver1||state.driver1Name} / ${state.currentDriver2||state.driver2Name}`;
 
-  ['ride-customer','ride-departure','ride-destination','ride-notes'].forEach(id => {
-    document.getElementById(id).value = '';
-  });
+  // 受理した配車依頼があれば自動入力、なければ空欄
+  if (acceptedReqData) {
+    document.getElementById('ride-customer').value    = acceptedReqData.customer;
+    document.getElementById('ride-departure').value   = acceptedReqData.departure;
+    document.getElementById('ride-destination').value = acceptedReqData.destination;
+    document.getElementById('ride-notes').value       = acceptedReqData.notes;
+    acceptedReqData = null; // 使い終わったらクリア
+  } else {
+    ['ride-customer','ride-departure','ride-destination','ride-notes'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+  }
   document.getElementById('fare-edit').value = '';
   document.getElementById('fare-display').textContent = '¥0';
   document.getElementById('live-fare').textContent = '¥0';
@@ -2067,7 +2076,8 @@ function stopContinuousGps() {
 // ============================================================
 // 配車依頼ポーリング
 // ============================================================
-let pendingReqId = null;
+let pendingReqId  = null;
+let acceptedReqData = null; // 受理した依頼データ（新規代行フォームへの自動入力用）
 
 async function checkForRequests() {
   if (!state.car || state.screen === 'setup') return;
@@ -2078,6 +2088,13 @@ async function checkForRequests() {
     const req = data[0];
     if (req.id !== pendingReqId) {
       pendingReqId = req.id;
+      // 依頼データを保存（受理時にフォームへ自動入力するため）
+      acceptedReqData = {
+        customer:    req.customer_name || '',
+        departure:   req.pickup        || '',
+        destination: req.destination   || '',
+        notes:       req.note          || ''
+      };
       document.getElementById('req-content').textContent =
         `お客様：${req.customer_name||'—'}　場所：${req.pickup||'—'}　→　${req.destination||'—'}`;
       document.getElementById('req-banner').classList.remove('hidden');
@@ -2097,6 +2114,8 @@ async function respondToRequest(status) {
   });
   document.getElementById('req-banner').classList.add('hidden');
   pendingReqId = null;
+  // 見送りの場合は保存データをクリア
+  if (status !== 'accepted') acceptedReqData = null;
 }
 
 // ============================================================
